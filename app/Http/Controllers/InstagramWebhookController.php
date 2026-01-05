@@ -49,7 +49,7 @@ class InstagramWebhookController extends Controller
             $timestamp = isset($event['timestamp']) ? date("Y-m-d H:i:s", $event['timestamp'] / 1000) : now();
 
             // Fetch Username
-            $userName = $this->fetchUsername($senderId);
+            $userName = $this->fetchUsername($senderId) ?? 'Unknown';
 
             \Illuminate\Support\Facades\Log::info("Saving message from $senderId ($userName): $messageText");
 
@@ -62,6 +62,10 @@ class InstagramWebhookController extends Controller
             ]);
             
             \Illuminate\Support\Facades\Log::info("Message saved successfully.");
+
+            // AUTO REPLY
+            $this->replyMessage($senderId, "Halo " . $userName);
+
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error("Error processing message: " . $e->getMessage());
         }
@@ -72,22 +76,47 @@ class InstagramWebhookController extends Controller
         $accessToken = env('INSTAGRAM_PAGE_ACCESS_TOKEN');
         
         if (!$accessToken) {
-            return null; // Token not configured
+            \Illuminate\Support\Facades\Log::warning("Page Access Token missing in env.");
+            return null; 
         }
 
         try {
+            // Using v19.0 graph api
             $response = \Illuminate\Support\Facades\Http::get("https://graph.facebook.com/v19.0/{$senderId}", [
-                'fields' => 'username',
+                'fields' => 'username,name',
                 'access_token' => $accessToken,
             ]);
 
             if ($response->successful()) {
-                return $response->json()['username'] ?? null;
+                $data = $response->json();
+                return $data['username'] ?? $data['name'] ?? null;
+            } else {
+                \Illuminate\Support\Facades\Log::error("Graph API Error for User Info ($senderId): " . $response->body());
             }
         } catch(\Exception $e) {
             \Illuminate\Support\Facades\Log::error("Failed to fetch username for ID $senderId: " . $e->getMessage());
         }
 
         return null;
+    }
+
+    protected function replyMessage($recipientId, $messageText)
+    {
+        $accessToken = env('INSTAGRAM_PAGE_ACCESS_TOKEN');
+
+        try {
+            $response = \Illuminate\Support\Facades\Http::post("https://graph.facebook.com/v19.0/me/messages?access_token={$accessToken}", [
+                'recipient' => ['id' => $recipientId],
+                'message' => ['text' => $messageText],
+            ]);
+
+            if ($response->successful()) {
+                \Illuminate\Support\Facades\Log::info("Auto-reply sent to $recipientId");
+            } else {
+                \Illuminate\Support\Facades\Log::error("Failed to send auto-reply: " . $response->body());
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Exception sending auto-reply: " . $e->getMessage());
+        }
     }
 }
