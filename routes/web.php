@@ -19,6 +19,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/instagram-messages', [\App\Http\Controllers\InstagramMessageController::class, 'index'])->name('instagram.index');
 });
 
+// Legal Pages
+Route::view('/privacy-policy', 'privacy')->name('privacy');
+Route::view('/terms-of-service', 'terms')->name('terms');
+
+
 require __DIR__.'/auth.php';
 
 
