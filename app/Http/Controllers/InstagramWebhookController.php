@@ -1,0 +1,93 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+
+class InstagramWebhookController extends Controller
+{
+    public function verify(Request $request)
+    {
+        $verifyToken = env('INSTAGRAM_VERIFY_TOKEN', 'my_custom_verify_token');
+
+        if ($request->input('hub_mode') === 'subscribe' && 
+            $request->input('hub_verify_token') === $verifyToken) {
+            return response($request->input('hub_challenge'), 200);
+        }
+
+        return response('Forbidden', 403);
+    }
+
+    public function handle(Request $request)
+    {
+        $payload = $request->all();
+        \Illuminate\Support\Facades\Log::info('Instagram Webhook Received:', $payload);
+
+        // Check if it's an Instagram event
+        if (isset($payload['object']) && $payload['object'] === 'instagram') {
+            foreach ($payload['entry'] as $entry) {
+                // Iterate over messaging events
+                if (isset($entry['messaging'])) {
+                    foreach ($entry['messaging'] as $messageEvent) {
+                        if (isset($messageEvent['message'])) {
+                            \Illuminate\Support\Facades\Log::info('Processing message event', $messageEvent);
+                            $this->processMessage($messageEvent);
+                        }
+                    }
+                }
+            }
+        }
+
+        return response('EVENT_RECEIVED', 200);
+    }
+
+    protected function processMessage($event)
+    {
+        try {
+            $senderId = $event['sender']['id'];
+            $messageText = $event['message']['text'] ?? '';
+            $timestamp = isset($event['timestamp']) ? date("Y-m-d H:i:s", $event['timestamp'] / 1000) : now();
+
+            // Fetch Username
+            $userName = $this->fetchUsername($senderId);
+
+            \Illuminate\Support\Facades\Log::info("Saving message from $senderId ($userName): $messageText");
+
+            // Store in Database
+            \App\Models\IgRowMessage::create([
+                'user_id' => $senderId,
+                'user_name' => $userName,
+                'message' => $messageText,
+                'timestamp' => $timestamp,
+            ]);
+            
+            \Illuminate\Support\Facades\Log::info("Message saved successfully.");
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Error processing message: " . $e->getMessage());
+        }
+    }
+
+    protected function fetchUsername($senderId)
+    {
+        $accessToken = env('INSTAGRAM_PAGE_ACCESS_TOKEN');
+        
+        if (!$accessToken) {
+            return null; // Token not configured
+        }
+
+        try {
+            $response = \Illuminate\Support\Facades\Http::get("https://graph.facebook.com/v19.0/{$senderId}", [
+                'fields' => 'username',
+                'access_token' => $accessToken,
+            ]);
+
+            if ($response->successful()) {
+                return $response->json()['username'] ?? null;
+            }
+        } catch(\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Failed to fetch username for ID $senderId: " . $e->getMessage());
+        }
+
+        return null;
+    }
+}
