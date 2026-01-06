@@ -105,13 +105,27 @@ class InstagramWebhookController extends Controller
         $accessToken = config('services.instagram.page_access_token');
 
         try {
-            $response = \Illuminate\Support\Facades\Http::post("https://graph.facebook.com/v19.0/me/messages?access_token={$accessToken}", [
+            // First, get the Instagram Business Account ID linked to this Page
+            $pageResponse = \Illuminate\Support\Facades\Http::get("https://graph.facebook.com/v19.0/me", [
+                'fields' => 'instagram_business_account',
+                'access_token' => $accessToken,
+            ]);
+
+            $igBusinessId = $pageResponse['instagram_business_account']['id'] ?? null;
+
+            if (!$igBusinessId) {
+                \Illuminate\Support\Facades\Log::error("No Instagram Business Account linked to this Page.");
+                return;
+            }
+
+            // Send message using the IG Business ID
+            $response = \Illuminate\Support\Facades\Http::post("https://graph.facebook.com/v19.0/{$igBusinessId}/messages?access_token={$accessToken}", [
                 'recipient' => ['id' => $recipientId],
                 'message' => ['text' => $messageText],
             ]);
 
             if ($response->successful()) {
-                \Illuminate\Support\Facades\Log::info("Auto-reply sent to $recipientId");
+                \Illuminate\Support\Facades\Log::info("Auto-reply sent to $recipientId from $igBusinessId");
             } else {
                 \Illuminate\Support\Facades\Log::error("Failed to send auto-reply: " . $response->body());
             }
