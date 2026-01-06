@@ -73,10 +73,10 @@ class InstagramWebhookController extends Controller
 
     protected function fetchUsername($senderId)
     {
-        $accessToken = env('INSTAGRAM_PAGE_ACCESS_TOKEN');
+        $accessToken = config('services.instagram.page_access_token');
         
         if (!$accessToken) {
-            \Illuminate\Support\Facades\Log::warning("Page Access Token missing in env.");
+            \Illuminate\Support\Facades\Log::warning("Page Access Token missing in config.");
             return null; 
         }
 
@@ -102,7 +102,7 @@ class InstagramWebhookController extends Controller
 
     protected function replyMessage($recipientId, $messageText)
     {
-        $accessToken = env('INSTAGRAM_PAGE_ACCESS_TOKEN');
+        $accessToken = config('services.instagram.page_access_token');
 
         try {
             $response = \Illuminate\Support\Facades\Http::post("https://graph.facebook.com/v19.0/me/messages?access_token={$accessToken}", [

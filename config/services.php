@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'instagram' => [
+        'page_access_token' => env('INSTAGRAM_PAGE_ACCESS_TOKEN'),
+        'verify_token' => env('INSTAGRAM_VERIFY_TOKEN'),
+    ],
+
 ];
